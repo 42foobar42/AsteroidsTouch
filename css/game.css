@@ -1,0 +1,13 @@
+div#main {
+	width:100%;
+}
+
+div#score {
+	height:5%;
+	width:100%;
+}
+
+div#game {
+	height:95%;
+	width:100%;
+}
