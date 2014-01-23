@@ -6,4 +6,5 @@ function makePlaygroundSize(){
 
 $( document ).ready(function() {
 	makePlaygroundSize();
+	webGLStart();
 });
