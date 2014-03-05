@@ -1,76 +1,47 @@
 var gl;
+var canvas;
+var shaderProgram;
+var positionLocation;
+var colorLocation;
+var translationLocation;
+var resolutionLocation;
+var rotationLocation;
+var scaleLocation;
 
-function initGL(canvas) {
+function initGL(canvass) {
     try {
-        gl = canvas.getContext("experimental-webgl");
-        gl.viewportWidth = canvas.width;
-        gl.viewportHeight = canvas.height;
+		canvas = document.getElementById("playground");
+		gl = getWebGLContext(canvas);
     } catch (e) {
     }
     if (!gl) {
         alert("Could not initialise WebGL, sorry :-(");
     }
- }
-
-
-function getShader(gl, id) {
-    var shaderScript = document.getElementById(id);
-    if (!shaderScript) {
-        return null;
-    }
-
-    var str = "";
-    var k = shaderScript.firstChild;
-    while (k) {
-        if (k.nodeType == 3) {
-            str += k.textContent;
-        }
-        k = k.nextSibling;
-    }
-
-    var shader;
-    if (shaderScript.type == "x-shader/x-fragment") {
-        shader = gl.createShader(gl.FRAGMENT_SHADER);
-    } else if (shaderScript.type == "x-shader/x-vertex") {
-        shader = gl.createShader(gl.VERTEX_SHADER);
-    } else {
-        return null;
-    }
-
-    gl.shaderSource(shader, str);
-    gl.compileShader(shader);
-
-    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-        alert(gl.getShaderInfoLog(shader));
-        return null;
-    }
-
-    return shader;
 }
-
-
-var shaderProgram;
 
 function initShaders() {
-    var fragmentShader = getShader(gl, "shader-fs");
-    var vertexShader = getShader(gl, "shader-vs");
-
-    shaderProgram = gl.createProgram();
-    gl.attachShader(shaderProgram, vertexShader);
-    gl.attachShader(shaderProgram, fragmentShader);
-    gl.linkProgram(shaderProgram);
-
-    if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
-        alert("Could not initialise shaders");
-    }
-
-    gl.useProgram(shaderProgram);
-    shaderProgram.vertexPositionAttribute = gl.getAttribLocation(shaderProgram, "aVertexPosition");
-    gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
-    shaderProgram.pMatrixUniform = gl.getUniformLocation(shaderProgram, "uPMatrix");
-    shaderProgram.mvMatrixUniform = gl.getUniformLocation(shaderProgram, "uMVMatrix");
+    var fragmentShader; // = getShader(gl, "shader-fs");
+    var vertexShader; //= getShader(gl, "shader-vs");
+	
+	vertexShader = createShaderFromScriptElement(gl, "shader-vs");
+	fragmentShader = createShaderFromScriptElement(gl, "shader-fs");
+	
+	program = createProgram(gl, [vertexShader, fragmentShader]);
+	gl.useProgram(program); 
+	
+	// look up where the vertex data needs to go.
+	positionLocation = gl.getAttribLocation(program, "a_position");
+	// lookup uniforms
+	resolutionLocation = gl.getUniformLocation(program, "u_resolution");
+	colorLocation = gl.getUniformLocation(program, "u_color");
+	translationLocation = gl.getUniformLocation(program, "u_translation");
+	rotationLocation = gl.getUniformLocation(program, "u_rotation");
+	scaleLocation = gl.getUniformLocation(program, "u_scale");
+	// set the resolution
+	console.log(canvas.width + " " + canvas.height)
+	gl.uniform2f(resolutionLocation, $("canvas").width(), $("canvas").height()); 
+	
 }
-
 
 var mvMatrix = mat4.create();
 var pMatrix = mat4.create();
@@ -78,66 +49,126 @@ var pMatrix = mat4.create();
 function setMatrixUniforms() {
     gl.uniformMatrix4fv(shaderProgram.pMatrixUniform, false, pMatrix);
     gl.uniformMatrix4fv(shaderProgram.mvMatrixUniform, false, mvMatrix);
-}
-
-var triangleVertexPositionBuffer;
-var squareVertexPositionBuffer;
+}	
 
 function initBuffers() {
-    triangleVertexPositionBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, triangleVertexPositionBuffer);
-    var vertices = [
-        0.0,  1.0,  0.0,
-        -1.0, -1.0,  0.0,
-        1.0, -1.0,  0.0
-    ];
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-    triangleVertexPositionBuffer.itemSize = 3;
-    triangleVertexPositionBuffer.numItems = 3;
+	var buffer = gl.createBuffer();
+	gl.clearColor(0.0, 0.0, 0.0, 1.0);
+	gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.enable(gl.DEPTH_TEST);
+	gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+	gl.enableVertexAttribArray(positionLocation);
+	gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+	
+	Objects.forEach(function(obj) {		
+		obj.getchilds().forEach(function(child) {
+			calcBuffer(child, buffer);
+		});
+		calcBuffer(obj, buffer);
+	});
+	
+	if (ship) {
+		ship.getchilds().forEach(function(child) {
+			calcBuffer(child, buffer);
+		});
+		calcBuffer(ship, buffer);
+	}
+}
 
-    squareVertexPositionBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, squareVertexPositionBuffer);
-    vertices = [
-        1.0,  1.0,  0.0,
-        -1.0,  1.0,  0.0,
-        1.0, -1.0,  0.0,
-       -1.0, -1.0,  0.0
-    ];
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-    squareVertexPositionBuffer.itemSize = 3;
-    squareVertexPositionBuffer.numItems = 4;
+function calcBuffer(obj, buffer){
+	var scale = [0.5, 0.7];
+	//scale = [(1/($("canvas").height() / 300))*0.7,(1/($("canvas").width() / 150))*0.5];
+	
+	if ($("canvas").height() > $("canvas").width()) {
+		// scale = [(1/($("canvas").height() / 500)),(1/($("canvas").width() / 200))];
+		scale = [2,1];
+	} else {
+		// scale = [(1/($("canvas").height() / 200)),(1/($("canvas").width() / 1300))];
+		scale = [1,1];
+	}
+	var xscal = $("canvas").width();
+	var yscal = $("canvas").height();
+	xscal = xscal / 300;
+	yscal = yscal /150;
+	scale = [xscal, yscal];
+	//scale = [(1/($("canvas").height() / 300)),(1/($("canvas").width() / 420))];
+	//scale = [(1/($("canvas").height() / 500)),(1/($("canvas").width() / 200))];
+	gl.bufferData(gl.ARRAY_BUFFER, obj.getvertices(),gl.STATIC_DRAW); 
+	gl.uniform4f(colorLocation, obj.getcolor()[0],obj.getcolor()[1],obj.getcolor()[2], 1);
+	// Set the translation.
+	gl.uniform2fv(translationLocation, obj.gettranslation()); 
+	gl.uniform2fv(rotationLocation, obj.getrotation());
+	// Set the scale.
+    gl.uniform2fv(scaleLocation, scale);
+	gl.drawArrays(gl.TRIANGLES, 0, obj.getnumItems());
 }
 
 
 function drawScene() {
-    gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+	var translation = [0, 0];
+}
 
-    mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
-    mat4.identity(mvMatrix);
+function drawObjects(obj){
+	// mat4.translate(mvMatrix, obj.getMatTranslation());
+	// gl.bindBuffer(gl.ARRAY_BUFFER, obj.buffer);
+	// gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, obj.getitemSize(), gl.FLOAT, false, 0, 0);
+		
+	// gl.bindBuffer(gl.ARRAY_BUFFER, obj.colorbuffer);
+	// gl.vertexAttribPointer(shaderProgram.vertexColorAttribute, obj.getitemSize(), gl.FLOAT, false, 0, 0); 
 
-    mat4.translate(mvMatrix, [-1.5, 0.0, -7.0]);
-    gl.bindBuffer(gl.ARRAY_BUFFER, triangleVertexPositionBuffer);
-    gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
-    setMatrixUniforms();
-    gl.drawArrays(gl.TRIANGLES, 0, triangleVertexPositionBuffer.numItems);
-
-
-    mat4.translate(mvMatrix, [6.0, 1.0, 0.0]);
-    gl.bindBuffer(gl.ARRAY_BUFFER, squareVertexPositionBuffer);
-    gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, squareVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
-    setMatrixUniforms();
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, squareVertexPositionBuffer.numItems);
+	// setMatrixUniforms();
+	// gl.drawArrays(gl.TRIANGLE_STRIP, 0, obj.getnumItems());
 }
 
 function webGLStart() {
     var canvas = document.getElementById("playground");
     initGL(canvas);
-    initShaders();
-    initBuffers();
+	if (gl) {
+		// canvas.onmousedown = handleMouseDown;
+		// document.onmouseup = handleMouseUp;
+		// document.onmousemove = handleMouseMove;
+		//canvas.ontouchstart = handleStart;
+		//canvas.onmousedown = handleStart;
+		initShaders();
+		setTimeout("mainLoop()", 1);
+	}
 
-    gl.clearColor(0.0, 0.0, 0.0, 1.0);
-    gl.enable(gl.DEPTH_TEST);
+	//window.requestAnimationFrame(animate);
+// gl.clearColor(0.0, 0.0, 0.0, 1.0);
+    // gl.enable(gl.DEPTH_TEST);
+    
 
-    drawScene();
+    //drawScene();
+}
+
+var ship;
+
+function mainLoop(){
+	//
+	//console.log(Objects.length);
+	if (!ship) {
+		console.log("init ship")
+		ship = new Ship();
+		// Ship.shouldMove();
+		ship.settranslation($("canvas").width() / 2,$("canvas").height()/2);
+		// ship.setrotation(-200, 1);
+		//ship.shouldMove();
+		//Objects.push(ship);
+	} else {
+		// console.log(lastMouseX + " " + lastMouseY);
+		//console.log(Objects[0].getspeed());
+		// Objects[0].setspeed(10);
+		// var test = Objects[0].Move();
+		// console.log(test[0] + " " + test[1]); 
+		ship.move();
+		// ship.setrotation(-2, 1);
+		// Objects[0].settranslation(Math.random() * 1000 % 300,Math.random() * 1000 % 150);
+		// console.log(Objects[0].getspeed());
+		// if(Objects[0].shouldMove()) {
+			// Objects[0].settranslation(lastMouseX,lastMouseY);
+		// }
+	}
+	// console.log(Objects[0].getspeed());
+	initBuffers();
+	window.requestAnimationFrame(mainLoop);
 }
