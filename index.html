@@ -14,33 +14,85 @@
  -->
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <link rel="stylesheet" type="text/css" href="css/firefoxos.css">
 	<link rel="stylesheet" type="text/css" href="css/game.css">
     <title>AsteroidsTouch</title>
 	<script type="text/javascript" src="js/lib/glMatrix-0.9.5.min.js"></script>
+	<script type="text/javascript" src="js/lib/webgl-utils.js"></script>
 	<script type="text/javascript" src="js/lib/jquery-1.9.1.js"></script>
 	<script type="text/javascript" src="js/custom/main.js"></script>
 	<script type="text/javascript" src="js/custom/webgl.js"></script>
 	<script type="text/javascript" src="js/custom/objects.js"></script>
+	<script type="text/javascript" src="js/custom/Ship.js"></script>
+	<script type="text/javascript" src="js/custom/BigRock.js"></script>
+	<script type="text/javascript" src="js/custom/Laser.js"></script>
+	<script type="text/javascript" src="js/custom/MediumRock.js"></script>
+	<script type="text/javascript" src="js/custom/SmallRock.js"></script>
+	<script type="text/javascript" src="js/custom/UFO.js"></script>
+	<script type="text/javascript" src="js/custom/controls.js"></script>
     <base target="_blank">
 	<script id="shader-fs" type="x-shader/x-fragment">
-    precision mediump float;
-
+    /*precision mediump float;
+	
+	varying vec4 vColor;
+	
     void main(void) {
-        gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
-    }
+        gl_FragColor = vColor;
+    }*/
+	precision mediump float;
+	uniform vec4 u_color;
+	
+	void main() {
+		gl_FragColor = u_color;
+	} 
 </script>
 
 <script id="shader-vs" type="x-shader/x-vertex">
-    attribute vec3 aVertexPosition;
+	/*
+	attribute vec3 aVertexPosition;
+	attribute vec4 aVertexColor;
 
     uniform mat4 uMVMatrix;
     uniform mat4 uPMatrix;
-
+	
+	varying vec4 vColor;
+	
     void main(void) {
         gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+		vColor = aVertexColor;
     }
+    */
+	attribute vec2 a_position;
+
+	uniform vec2 u_resolution;
+	uniform vec2 u_translation;
+	uniform vec2 u_rotation;
+	uniform vec2 u_scale;
+
+	void main() {
+		// Scale the positon
+		vec2 scaledPosition = a_position * u_scale;
+  
+		// Rotate the position
+		vec2 rotatedPosition = vec2(
+			scaledPosition.x * u_rotation.y + scaledPosition.y * u_rotation.x,
+			scaledPosition.y * u_rotation.y - scaledPosition.x * u_rotation.x);
+	 
+	   // convert the rectangle from pixels to 0.0 to 1.0
+	   vec2 position = rotatedPosition + u_translation;
+
+	   // convert from 0->1 to 0->2
+		vec2 zeroToOne = position / u_resolution;
+
+	   // convert from 0->2 to -1->+1 (clipspace)
+	   vec2 zeroToTwo = zeroToOne * 2.0;
+
+		vec2 clipSpace = zeroToTwo - 1.0;
+		
+	    gl_Position = vec4(clipSpace * vec2(1, -1), 0, 1);
+	}
+	
 </script>
 </head>
 
